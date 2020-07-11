@@ -1,1 +1,1 @@
-computer simulation data analysis pacakge
+computer simulation data analysis package
