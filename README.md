@@ -5,3 +5,5 @@ This package is designed for who is interested in analyzing the snapshots from m
 To use the package efficiently, one intelligent way is to write a python script by importing desired modules and functions. In this way, all results can be obtained in sequence with suitable settings.
 
 The package is distributed in the hope that it will be helpful, but WITHOUT ANY WARRANTY. Although the codes were benchmarked when developed, the users are responsible for the correctness.
+
+A detailed manual is provided in the corresponding [Github-Wiki](https://github.com/yuanchaohu/CSDAP/wiki). To modifty the math written by Latex, the editor typora is recommended and the extension 'MathJax Plugin for Github' for Google Chrome is required to show the equations correctly online.
