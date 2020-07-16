@@ -8,4 +8,4 @@ The package is distributed in the hope that it will be helpful, but WITHOUT ANY 
 
 A detailed manual is provided in the corresponding [Github-Wiki](https://github.com/yuanchaohu/CSDAP/wiki). To modifty the math written by Latex, the editor typora is recommended and the extension 'MathJax Plugin for Github' for Google Chrome is required to show the equations correctly online.
 
-A pdf version of the manual is also available from doc/.
+A pdf version of the manual is also available from doc.
