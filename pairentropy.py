@@ -85,14 +85,16 @@ class S2:
         if np.sum(self.TypeNumber) != self.ParticleNumber:
             print ('Warning: ****** Sum of Indivdual Types is Not the Total Amount*******')
 
-    def timeave(self, ppp, avetime, rdelta = 0.01, dt = 0.002, outputfile = ''):
-        """ Calculate Time Averaged S2
+    def timeave(self, ppp, avetime, rdelta = 0.01, dt = 0.002, outputS2 = ''):
+        """ Calculate Time Averaged S2 or instantaneous ones
             
-            outputfile is file name storing outputs
             ppp is periodic boundary conditions, set 1 for yes and 0 for no, should be a list
-            avetime is the time scale used to average S2, in time unit; set 0 to get results of individual snapshot
+            avetime is the time scale used to average S2, in time unit; 
+                set 0 to get results of individual snapshot
             rdelta is the bin size of gr, default is 0.01
             dt is timestep of a simulation, default is 0.002
+            outputS2 is the filename to store the atomic S2 values from the function self.timeave, 
+                set '' to ignore this output
         """
 
         if len(self.Type) == 1:
@@ -100,47 +102,50 @@ class S2:
         if len(self.Type) == 2: 
             S2results      = self.Binary(ppp, rdelta)
         if len(self.Type) == 3: 
-            S2results =    self.Ternary(ppp, rdelta)
+            S2results      = self.Ternary(ppp, rdelta)
         if len(self.Type) == 4: 
             S2results      = self.Quarternary(ppp, rdelta)
         if len(self.Type) == 5: 
             S2results      = self.Quinary(ppp, rdelta)
+        if len(self.Type) > 5:
+            S2results      = self.Unary(ppp, rdelta)
 
         if avetime:
             avetime    = int(avetime / dt / self.TimeStep)
             S2average  = np.zeros((self.ParticleNumber, self.SnapshotNumber - avetime)) 
             for n in range(self.SnapshotNumber - avetime):
-                S2average[:, n] = S2results[:, n: n + avetime + 1].mean(axis = 1)
+                S2average[:, n] = S2results[:, n: n + avetime].mean(axis = 1)
             results = np.column_stack((np.arange(self.ParticleNumber) + 1, S2average))
         else:
             results = np.column_stack((np.arange(self.ParticleNumber) + 1, S2results))
 
         names      = 'id   S2_of_each_snapshot'
-        fileformat = '%d ' + '%.6f ' * (self.SnapshotNumber - avetime)
-
-        if outputfile:
-            np.savetxt(outputfile, results, fmt = fileformat, header = names, comments = '')
+        if outputS2:
+            fileformat = '%d ' + '%.6f ' * (self.SnapshotNumber - avetime)
+            np.savetxt(outputS2, results, fmt = fileformat, header = names, comments = '')
         
         print ('---------- Get S2 results over ---------')
         return results, names
 
-    def spatialcorr(self, outputs2, ppp, avetime, rdelta = 0.01, dt = 0.002, outputcorr = ''):
-        """ Calculate Spatial Correlation of Time Averaged S2
+    def spatialcorr(self, ppp, avetime, rdelta = 0.01, dt = 0.002, outputS2 = '', outputcorr = ''):
+        """ Calculate Spatial Correlation of Time Averaged or individual S2
             
-            Excuting this function will excute the function timeave() first, so the averaged S2 will be output
+            Excuting this function will excute the function timeave() first, so the averaged/individual S2 will be returned
             outputcorr is file name storing outputs of spatial correlation of time averaged S2
-            outputs2 is file name storing outputs of time averaged S2
             ppp is periodic boundary conditions, set 1 for yes and 0 for no, should be a list
             avetime is the time scale used to average S2, in time unit; set 0 to get results of individual snapshot
             rdelta is the bin size of gr, default is 0.01
             dt is timestep of a simulation, default is 0.002
+            outputS2 is the filename to store the atomic S2 values from the function self.timeave, 
+                set '' to ignore this output
         """
+
         print ('--------- Calculating Spatial Correlation of S2 ------')
 
-        timeaves2      = self.timeave(outputs2, ppp, avetime, rdelta, dt, results_path)[:, 1:].T 
+        timeaves2, _   = self.timeave(ppp, avetime, rdelta, dt, outputS2)[:, 1:].T 
         MAXBIN         = int(self.Boxlength.min() / 2.0 / rdelta)
         grresults      = np.zeros((MAXBIN, 3))
-        SnapshotNumber = len(timeaves2[:, 0])
+        SnapshotNumber = timeaves2.shape[0]
         Positions      = self.Positions[:SnapshotNumber]
         for n in range(SnapshotNumber):
             hmatrixinv = np.linalg.inv(self.hmatrix[n])
@@ -532,14 +537,15 @@ class S2AVE:
         if np.sum(self.TypeNumber) != self.ParticleNumber:
             print ('Warning: ****** Sum of Indivdual Types is Not the Total Amount*******')
 
-    def getS2(self, ppp, avetime, rdelta = 0.01, dt = 0.002, outputfile = ''):
+    def getS2(self, ppp, avetime, rdelta = 0.01, dt = 0.002, outputS2 = ''):
         """ Get Particle-level S2 by averaging particle gr over different snapshots
             
-            outputfile is file name storing outputs
             ppp is periodic boundary conditions, set 1 for yes and 0 for no, should be a list
             avetime is the time scale used to average particle gr, in time unit
             rdelta is the bin size of gr, default is 0.01
             dt is timestep of a simulation, default is 0.002
+            outputS2 is the filename to store the atomic S2 values from the function self.getS2, 
+                set '' to ignore this output
         """
 
         if len(self.Type) == 1:
@@ -552,17 +558,20 @@ class S2AVE:
             S2results      = self.Quarternary(ppp, rdelta, avetime, dt)
         if len(self.Type) == 5: 
             S2results      = self.Quinary(ppp, rdelta, avetime, dt)
+        if len(self.Type)  > 5:
+            S2results      = self.Unary(ppp, rdelta, avetime, dt)
 
         results    = np.column_stack((np.arange(self.ParticleNumber) + 1, S2results))
         names      = 'id   S2_of_each_snapshot'
-        fileformat = '%d ' + '%.6f ' * S2results.shape[1]
-        if outputfile:
-            np.savetxt(outputfile, results, fmt = fileformat, header = names, comments = '')
+
+        if outputS2:
+            fileformat = '%d ' + '%.6f ' * S2results.shape[1]
+            np.savetxt(outputS2, results, fmt = fileformat, header = names, comments = '')
 
         print ('---------- Get S2 results over ---------')
         return S2results, names
 
-    def spatialcorr(self, outputs2, ppp, avetime, rdelta = 0.01, dt = 0.002, outputcorr = ''):
+    def spatialcorr(self, ppp, avetime, rdelta = 0.01, dt = 0.002, outputS2 = '', outputcorr = ''):
         """ Calculate Spatial Correlation of S2 that is obtained by averaging particle gr
             
             Excuting this function will excute the function getS2() first, so S2 will be output
@@ -572,10 +581,12 @@ class S2AVE:
             avetime is the time scale used to average gr, in time unit
             rdelta is the bin size of gr, default is 0.01
             dt is timestep of a simulation, default is 0.002
+            outputS2 is the filename to store the atomic S2 values from the function self.getS2, 
+                set '' to ignore this output
         """
         print ('--------- Calculating Spatial Correlation of S2 ------')
 
-        timeaves2      = self.getS2(outputs2, ppp, avetime, rdelta, dt, results_path).T 
+        timeaves2, _   = self.getS2(ppp, avetime, rdelta, dt, outputS2)[:, 1:].T 
         MAXBIN         = int(self.Boxlength.min() / 2.0 / rdelta)
         grresults      = np.zeros((MAXBIN, 3))
         SnapshotNumber = timeaves2.shape[0]
@@ -633,7 +644,7 @@ class S2AVE:
         binright -= 0.5 * rdelta #middle of each bin
         for n in range(self.SnapshotNumber - avetime):
             for i in range(self.ParticleNumber):
-                aveparticlegr       = particlegr[i, n: n + avetime + 1].mean(axis = 0)
+                aveparticlegr       = particlegr[i, n: n + avetime].mean(axis = 0)
                 integralgr          = (aveparticlegr * np.log(aveparticlegr + 1e-12) - (aveparticlegr - 1)) * self.rhototal
                 S2results[i, n]     =-0.5 * np.sum(Areafac(self.ndim) * np.pi * binright**(self.ndim - 1) * integralgr * rdelta)
 
@@ -676,7 +687,7 @@ class S2AVE:
         binright -= 0.5 * rdelta #middle of each bin
         for n in range(self.SnapshotNumber - avetime):
             for i in range(self.ParticleNumber):
-                aveparticlegr       = particlegr[i, n: n + avetime + 1].mean(axis = 0)
+                aveparticlegr       = particlegr[i, n: n + avetime].mean(axis = 0)
                 integralgr          = (aveparticlegr * np.log(aveparticlegr + 1e-12) - (aveparticlegr - 1)) * usedrho[i, n][np.newaxis, :]
                 integralgr          = integralgr[:, np.any(aveparticlegr, axis = 0)]   #remove zero columns in gr 
                 S2results[i, n]     =-0.5 * np.sum(Areafac(self.ndim) * np.pi * binright**(self.ndim - 1) * integralgr.sum(axis = 1) * rdelta)
@@ -739,7 +750,7 @@ class S2AVE:
         binright -= 0.5 * rdelta #middle of each bin
         for n in range(self.SnapshotNumber - avetime):
             for i in range(self.ParticleNumber):
-                aveparticlegr       = particlegr[i, n: n + avetime + 1].mean(axis = 0)
+                aveparticlegr       = particlegr[i, n: n + avetime].mean(axis = 0)
                 integralgr          = (aveparticlegr * np.log(aveparticlegr + 1e-12) - (aveparticlegr - 1)) * usedrho[i, n][np.newaxis, :]
                 integralgr          = integralgr[:, np.any(aveparticlegr, axis = 0)]   #remove zero columns in gr 
                 S2results[i, n]     =-0.5 * np.sum(Areafac(self.ndim) * np.pi * binright**(self.ndim - 1) * integralgr.sum(axis = 1) * rdelta)
@@ -825,7 +836,7 @@ class S2AVE:
         binright -= 0.5 * rdelta #middle of each bin
         for n in range(self.SnapshotNumber - avetime):
             for i in range(self.ParticleNumber):
-                aveparticlegr       = particlegr[i, n: n + avetime + 1].mean(axis = 0)
+                aveparticlegr       = particlegr[i, n: n + avetime].mean(axis = 0)
                 integralgr          = (aveparticlegr * np.log(aveparticlegr + 1e-12) - (aveparticlegr - 1)) * usedrho[i, n][np.newaxis, :]
                 integralgr          = integralgr[:, np.any(aveparticlegr, axis = 0)]   #remove zero columns in gr 
                 S2results[i, n]     =-0.5 * np.sum(Areafac(self.ndim) * np.pi * binright**(self.ndim - 1) * integralgr.sum(axis = 1) * rdelta)
@@ -941,7 +952,7 @@ class S2AVE:
         binright -= 0.5 * rdelta #middle of each bin
         for n in range(self.SnapshotNumber - avetime):
             for i in range(self.ParticleNumber):
-                aveparticlegr       = particlegr[i, n: n + avetime + 1].mean(axis = 0)
+                aveparticlegr       = particlegr[i, n: n + avetime].mean(axis = 0)
                 integralgr          = (aveparticlegr * np.log(aveparticlegr + 1e-12) - (aveparticlegr - 1)) * usedrho[i, n][np.newaxis, :]
                 integralgr          = integralgr[:, np.any(aveparticlegr, axis = 0)]   #remove zero columns in gr 
                 S2results[i, n]     =-0.5 * np.sum(Areafac(self.ndim) * np.pi * binright**(self.ndim - 1) * integralgr.sum(axis = 1) * rdelta)
