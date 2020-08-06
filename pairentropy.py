@@ -142,7 +142,7 @@ class S2:
 
         print ('--------- Calculating Spatial Correlation of S2 ------')
 
-        timeaves2, _   = self.timeave(ppp, avetime, rdelta, dt, outputS2)[:, 1:].T 
+        timeaves2      = self.timeave(ppp, avetime, rdelta, dt, outputS2)[0][:, 1:].T 
         MAXBIN         = int(self.Boxlength.min() / 2.0 / rdelta)
         grresults      = np.zeros((MAXBIN, 3))
         SnapshotNumber = timeaves2.shape[0]
@@ -586,7 +586,7 @@ class S2AVE:
         """
         print ('--------- Calculating Spatial Correlation of S2 ------')
 
-        timeaves2, _   = self.getS2(ppp, avetime, rdelta, dt, outputS2)[:, 1:].T 
+        timeaves2      = self.getS2(ppp, avetime, rdelta, dt, outputS2)[0][:, 1:].T 
         MAXBIN         = int(self.Boxlength.min() / 2.0 / rdelta)
         grresults      = np.zeros((MAXBIN, 3))
         SnapshotNumber = timeaves2.shape[0]
