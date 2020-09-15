@@ -31,11 +31,11 @@ def fits(fit_func, xdata, ydata, rangea = 0, rangeb = 0, p0 = [], bounds = (), s
         xfit = np.linspace(xdata.min(), xdata.max(), 10000)
         if style is 'log': 
             #xfit = np.logspace(np.log10(xdata.min()), np.log10(ydata.max()), 100)
-            xfit = np.geomspace(xdata.min(), xdata.max(), 100)
+            xfit = np.geomspace(xdata.min(), xdata.max(), 10000)
     else:
         xfit = np.linspace(rangea, rangeb, 10000)
         if style is 'log':
-            xfit = np.geomspace(rangea, rangeb, 100)
+            xfit = np.geomspace(rangea, rangeb, 10000)
 
     yfit = fit_func(xfit, *popt)
     return (popt, perr, xfit, yfit)
