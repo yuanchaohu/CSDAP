@@ -4,7 +4,7 @@ import sys, os
 import numpy as np 
 from   scipy.optimize import curve_fit
 
-def fits(fit_func, xdata, ydata, rangea = 0, rangeb = 0, p0 = [], bounds = ()):
+def fits(fit_func, xdata, ydata, rangea = 0, rangeb = 0, p0 = [], bounds = (), style = 'linear'):
     """
     This function is used to fit existing data in numpy array
     fiting function and (X, Y) should be provided
@@ -29,7 +29,13 @@ def fits(fit_func, xdata, ydata, rangea = 0, rangeb = 0, p0 = [], bounds = ()):
     
     if rangeb == 0:
         xfit = np.linspace(xdata.min(), xdata.max(), 10000)
+        if style is 'log': 
+            #xfit = np.logspace(np.log10(xdata.min()), np.log10(ydata.max()), 100)
+            xfit = np.geomspace(xdata.min(), xdata.max(), 100)
     else:
         xfit = np.linspace(rangea, rangeb, 10000)
+        if style is 'log':
+            xfit = np.geomspace(rangea, rangeb, 100)
+
     yfit = fit_func(xfit, *popt)
     return (popt, perr, xfit, yfit)
