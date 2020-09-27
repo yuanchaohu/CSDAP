@@ -22,34 +22,6 @@ import pandas as pd
 from dump import readdump
 from math import pi, sin, cos
 
-def Sq_qvector(qvector, Positions, Boxlength):
-    """calculate S(q) for a single q vector
-    
-    qvector is set as [1, 1, 0] for example
-    Positions should be a list of atomic positions
-    Boxlength can a single value but prefers to be a numpy array for all dimensions
-    """
-
-    twopidl = 2.0 * pi / Boxlength
-    qvector = twopidl * qvector 
-    qvalue  = np.linalg.norm(qvector)
-    numofconfig = len(Positions)
-    numofatoms  = Positions[0].shape[0]
-
-    results = 0
-    for n in range(numofconfig):
-        sin_part = 0
-        cos_part = 0
-        for i in range(numofatoms):
-            theta = np.dot(qvector, Positions[n][i])
-            sin_part += sin(theta)
-            cos_part += cos(theta)
-        
-        results += sin_part**2 + cos_part**2
-    results = results / numofconfig / numofatoms
-
-    return qvalue, results
-
 
 def wavevector3d(Numofq = 500):
     """ Define Wave Vector for Structure Factors at three dimension """
