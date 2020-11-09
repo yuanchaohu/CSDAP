@@ -11,7 +11,7 @@ Authorinfo = """
 Docstr = """
          This module calculates the spatial correlation of a static property
          ref: Cubuk et al., Science 358, 1033–1037 (2017)
-         (<S(0)S(r)> - <S>^2)/(<S^2> - <S>^2)
+         (<S(0)S(r)> - <S>^2)/(<S^2> - <S>^2) [SC_order]
          """
 
 import numpy as np 
@@ -71,9 +71,10 @@ def SC_order(inputfile, orderings, ndim = 3, filetype = 'lammps', moltypes = '',
 
 def Nematic_order(file_positions, file_orientations, ndim=2, filetype='lammps', moltypes='', rdelta=0.02, ppp=[1,1], outputfile=''):
     """
-    calculate the correlation function of nematic ordering based on dipoles
+    calculate the correlation function of nematic ordering based on dipoles/spins/ or molecular orientation
 
     The formula is g(r_ab)=(3/2)*<(n_a*n_b)**2>-(1/2) ref: Chalker et al. PRL 68, 855 (1992)
+    The second Legendre polynomial of n_a*n_b
     """
     
     from dumpAngular import readangular
@@ -102,11 +103,12 @@ def Nematic_order(file_positions, file_orientations, ndim=2, filetype='lammps', 
             Countvalue, BinEdge = np.histogram(distance, bins=MAXBIN, range=(0, MAXBIN*rdelta))
             results[:, 0] += Countvalue
 
-            orderingsIJ   = np.square((d2.velocity[n][i+1:]*d2.velocity[n][i]).sum(axis=1))
-            Countvalue, _ = np.histogram(distance, bins=MAXBIN, range=(0, MAXBIN*rdelta), weights=orderingsIJ)
+            orderingsIJ = (d2.velocity[n][i+1:] * d2.velocity[n][i]).sum(axis=1) #u_i dot u_j, cos(theta)
+            orderingsIJ = (3*np.square(orderingsIJ)-1)/2 #P2, Legendre polynomial
+            Countvalue, BinEdge = np.histogram(distance, bins=MAXBIN, range=(0, MAXBIN*rdelta), weights=orderingsIJ)
             results[:, 1] += Countvalue
-    
-    results[:, 1] = (3*results[:, 1]/results[:, 0]-1)/2
+
+    results[:, 1] /= results[:, 0]
     results[:, 0] = (BinEdge[1:] - 0.5*rdelta)
 
     names = 'r Nr'
