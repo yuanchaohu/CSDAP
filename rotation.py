@@ -105,7 +105,7 @@ def Rorder(filename, ndim = 3, neighborfile = '', outputfile = ''):
             CII = velocity[n][i] * velocity[n][Neighborlist[i, 1:1 + Neighborlist[i, 0]]]
             #psi = np.linalg.norm(CII, axis = 1).sum()
             #results[i, n] = psi / Neighborlist[i, 0]
-            results[i, n] = CII.sum(axis = 1).mean()
+            results[i, n] = np.abs(CII.sum(axis = 1)).mean()
 
     results = np.column_stack((np.arange(d.ParticleNumber[0])+1, results))
     if outputfile:
@@ -140,7 +140,7 @@ def RorderIJ(filename, ndim = 3, UIJ = 0.9, neighborfile = '', outputfile = '', 
         for i in range(d.ParticleNumber[n]):
             CII = velocity[n][i] * velocity[n][Neighborlist[i, 1:1 + Neighborlist[i, 0]]]
             #psi = np.linalg.norm(CII, axis = 1)
-            psi = CII.sum(axis = 1)
+            psi = np.abs(CII.sum(axis = 1))
             results[i, n] = (psi > UIJ).sum()
             if outputfileij:
                 fij.write('%d %d ' %(i+1, Neighborlist[i, 0]))
