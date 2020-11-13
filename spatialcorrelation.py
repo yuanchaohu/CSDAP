@@ -16,6 +16,7 @@ Docstr = """
 
 import numpy as np 
 from dump import readdump
+from ParticleNeighbors import Voropp
 
 def SC_order(inputfile, orderings, ndim = 3, filetype = 'lammps', moltypes = '', rdelta = 0.01, ppp = [1,1,1], outputfile = ''):
     """Calculate spatial correlation of orderings
@@ -69,12 +70,18 @@ def SC_order(inputfile, orderings, ndim = 3, filetype = 'lammps', moltypes = '',
     print ('-----calculate spatial correlation over----')
     return results, names
 
-def Nematic_order(file_positions, file_orientations, ndim=2, filetype='lammps', moltypes='', rdelta=0.02, ppp=[1,1], outputfile=''):
+def Kronecker_delta(i, j):
+    if i == j:
+        return 1
+    else:
+        return 0
+
+def TensorialOrder(file_positions, file_orientations, neighborfile='', ndim=2, filetype='lammps', moltypes='', rdelta=0.02, ppp=[1,1], outputfile=''):
     """
     calculate the correlation function of nematic ordering based on dipoles/spins/ or molecular orientation
-
-    The formula is g(r_ab)=(3/2)*<(n_a*n_b)**2>-(1/2) ref: Chalker et al. PRL 68, 855 (1992)
-    The second Legendre polynomial of n_a*n_b
+    based on the tensorial order parameter Q_ij used for liquid crystal phase
+    
+    Ref. Zapotocky et al. Phys. Rev. E 51, 1216 (1995)
     """
     
     from dumpAngular import readangular
@@ -89,7 +96,32 @@ def Nematic_order(file_positions, file_orientations, ndim=2, filetype='lammps', 
 
     if d1.SnapshotNumber != d2.SnapshotNumber:
         raise OSError('*****Positions and Orienations do NOT match*****')
+
+    #calculate atomic-level tensorial order
+    QIJ = []
+    for n in range(d1.SnapshotNumber):
+        medium = np.zeros((d1.ParticleNumber[n], ndim, ndim))
+        for i in range(d1.ParticleNumber[n]):
+            mu = d2.velocity[n][i]
+            for x in range(ndim):
+                for y in range(ndim):
+                    medium[i, x, y] = (ndim*mu[x]*mu[y]-Kronecker_delta(x, y))/2
+        QIJ.append(medium)
     
+    #coarse-graining over certain volume if neighbor list provided
+    if neighborfile:
+        QIJ0 = QIJ.copy() #keep the original data unchanged during coarse-graining
+        f = open(neighborfile)
+        for n in range(d1.SnapshotNumber):
+            cnlist = Voropp(f, d1.ParticleNumber[n])
+            for i in range(d1.ParticleNumber[n]):
+                for j in range(cnlist[i, 0]):
+                    QIJ[n][i] += QIJ0[n][cnlist[i, 1+j]]
+                QIJ[n][i] /= (1+cnlist[i, 0])
+        del QIJ0
+        f.close()
+    
+    #calculate spatial correlation
     MAXBIN = int(d1.Boxlength[0].min() / 2.0 / rdelta)
     results = np.zeros((MAXBIN, 2))
     for n in range(d1.SnapshotNumber):
@@ -103,15 +135,18 @@ def Nematic_order(file_positions, file_orientations, ndim=2, filetype='lammps', 
             Countvalue, BinEdge = np.histogram(distance, bins=MAXBIN, range=(0, MAXBIN*rdelta))
             results[:, 0] += Countvalue
 
-            orderingsIJ = (d2.velocity[n][i+1:] * d2.velocity[n][i]).sum(axis=1) #u_i dot u_j, cos(theta)
-            orderingsIJ = (3*np.square(orderingsIJ)-1)/2 #P2, Legendre polynomial
+            orderingsIJ = []
+            for j in range(i+1, d1.ParticleNumber[n]):
+                medium = np.trace(np.matmul(QIJ[n][i], QIJ[n][j]))
+                orderingsIJ.append(medium)           
+            
             Countvalue, BinEdge = np.histogram(distance, bins=MAXBIN, range=(0, MAXBIN*rdelta), weights=orderingsIJ)
             results[:, 1] += Countvalue
 
     results[:, 1] /= results[:, 0]
     results[:, 0] = (BinEdge[1:] - 0.5*rdelta)
 
-    names = 'r Nr'
+    names = 'r Cr'
     if outputfile:
         np.savetxt(outputfile, results, fmt='%.6f', header=names, comments='')
     
