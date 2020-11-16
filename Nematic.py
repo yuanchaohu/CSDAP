@@ -17,8 +17,8 @@ import numpy as np
 from dumpAngular import readangular
 
 
-def Legendre_polynomials(x):
-    return (3 * x**2 - 1) / 2
+def Legendre_polynomials(x, ndim):
+    return (ndim * x**2 - 1) / 2
 
 def Kronecker_delta(i, j):
     if i == j:
@@ -40,23 +40,45 @@ def OrderParameters(files_orientation, ndim=2):
 
     g2 = 0
     Qij_total = 0
+    P2_one = 0
     Qij = np.zeros((d.ParticleNumber[0], d.SnapshotNumber))
     for n in range(d.SnapshotNumber):
         #second order Legendre Polynormial
-        for i in range(d.ParticleNumber[n]-1):
-            uij = (d.velocity[n][i+1:] * d.velocity[n][i]).sum(axis=1)
-            g2 += Legendre_polynomials(uij).mean()
+        #for i in range(d.ParticleNumber[n]-1):
+            #uij = (d.velocity[n][i+1:] * d.velocity[n][i]).sum(axis=1)
+        for i in range(d.ParticleNumber[n]):
+            condition = np.arange(d.ParticleNumber[n],dtype=np.int32) != i 
+            uij = (d.velocity[n][i] * d.velocity[n][condition]).sum(axis=1)
+            g2 += Legendre_polynomials(uij, ndim).mean()
         
         #tensorial order
+        Qij_one = 0
         for i in range(d.ParticleNumber[n]):
             medium = np.zeros((ndim, ndim))
             mu = d.velocity[n][i]
             for x in range(ndim):
                 for y in range(ndim):
-                    medium[x, y] = 1.50*mu[x]*mu[y]-0.50*Kronecker_delta(x, y)
+                    medium[x, y] = (ndim*mu[x]*mu[y]-Kronecker_delta(x, y))/2
             Qij_total += medium
-            Qij[i, n] = np.linalg.eig(medium)[0].max()
+            #Qij[i, n] = np.linalg.eig(medium)[0].max()
+            Qij_one += medium
+        
+        Qij_one = np.linalg.eig(Qij_one / d.ParticleNumber[n])
+        director = Qij_one[1][Qij_one[0].argmax()]
+        medium = (d.velocity[n] * director[np.newaxis, :]).sum(axis=1)
+        P2_one += Legendre_polynomials(medium, ndim).mean()
 
-    Qij_total = np.linalg.eig(Qij_total/Qij.size)[0].max()   
+
+    Qij_total /= Qij.size 
+    Qij_total = np.linalg.eig(Qij_total)#[0].max()   
     g2 = g2 / d.SnapshotNumber / d.ParticleNumber[0]
-    return g2, Qij_total
+    P2_one /= d.SnapshotNumber
+    
+    director = Qij_total[1][Qij_total[0].argmax()]
+    P2 = 0
+    for n in range(d.SnapshotNumber):
+        medium = (d.velocity[n] * director[np.newaxis, :]).sum(axis=1)
+        P2 += Legendre_polynomials(medium, ndim).mean()
+    P2 /= d.SnapshotNumber
+
+    return g2, Qij_total[0].max(), P2, P2_one
