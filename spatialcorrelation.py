@@ -121,7 +121,7 @@ def TensorialOrder(file_positions, file_orientations, neighborfile='', ndim=2, f
                 for j in range(cnlist[i, 0]):
                     QIJ[n][i] += QIJ0[n][cnlist[i, 1+j]]
                 QIJ[n][i] /= (1+cnlist[i, 0])   
-                eigenvalues[i, n] = np.linalg.eig(QIJ[n][i])[0].max()   
+                eigenvalues[i, n] = np.linalg.eig(QIJ[n][i])[0].max()*2.0   
                 traceII[i, n] = np.trace(np.matmul(QIJ[n][i], QIJ[n][i]))
         del QIJ0
         f.close()
