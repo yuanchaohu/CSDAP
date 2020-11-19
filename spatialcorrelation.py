@@ -10,8 +10,6 @@ Authorinfo = """
 
 Docstr = """
          This module calculates the spatial correlation of a static property
-         ref: Cubuk et al., Science 358, 1033–1037 (2017)
-         (<S(0)S(r)> - <S>^2)/(<S^2> - <S>^2) [SC_order]
          """
 
 import numpy as np 
@@ -27,6 +25,10 @@ def SC_order(inputfile, orderings, ndim = 3, filetype = 'lammps', moltypes = '',
         its shape is [atom_number, snapshot_number]
         this is the standard output format of this analysis package:
         READ: orders = np.loadtxt(orderfile, skiprows = 1)[:, 1:]
+
+        ref: Cubuk et al., Science 358, 1033–1037 (2017)
+        (<S(0)S(r)> - <S>^2)/(<S^2> - <S>^2)
+        <S(0)S(r)>
     """
 
     d = readdump(inputfile, ndim, filetype, moltypes)
@@ -40,7 +42,7 @@ def SC_order(inputfile, orderings, ndim = 3, filetype = 'lammps', moltypes = '',
         raise ValueError(errorinfo)
 
     MAXBIN  = int(d.Boxlength[0].min() / 2.0 / rdelta)
-    results = np.zeros((MAXBIN, 2))
+    results = np.zeros((MAXBIN, 3))
     for n in range(d.SnapshotNumber):
         hmatrixinv = np.linalg.inv(d.hmatrix[n])
         for i in range(d.ParticleNumber[n] - 1):
@@ -56,14 +58,13 @@ def SC_order(inputfile, orderings, ndim = 3, filetype = 'lammps', moltypes = '',
             Countvalue, BinEdge = np.histogram(distance, bins = MAXBIN, range = (0, MAXBIN * rdelta), weights = orderingsIJ)
             results[:, 1] += Countvalue
 
-    
     results[:, 1] /= results[:, 0]
     medium1 = np.square(orderings.mean())
     medium2 = np.square(orderings).mean()
-    results[:, 1] = (results[:, 1] - medium1) / (medium2 - medium1)
+    results[:, 2] = (results[:, 1] - medium1) / (medium2 - medium1)
     results[:, 0] = (BinEdge[1:] - 0.5 * rdelta)
   
-    names   = 'r Sr'
+    names   = 'r Sr Sr_norm'
     if outputfile:
         np.savetxt(outputfile, results, fmt = '%.6f', header = names, comments = '')
 
@@ -107,23 +108,29 @@ def TensorialOrder(file_positions, file_orientations, neighborfile='', ndim=2, f
                 for y in range(ndim):
                     medium[i, x, y] = (ndim*mu[x]*mu[y]-Kronecker_delta(x, y))/2
         QIJ.append(medium)
-    
+
     #coarse-graining over certain volume if neighbor list provided
+    eigenvalues = np.zeros((d1.ParticleNumber[0], d1.SnapshotNumber))
+    traceII = np.zeros_like(eigenvalues)
     if neighborfile:
-        QIJ0 = QIJ.copy() #keep the original data unchanged during coarse-graining
+        QIJ0 = np.copy(QIJ) #keep the original data unchanged during coarse-graining
         f = open(neighborfile)
         for n in range(d1.SnapshotNumber):
             cnlist = Voropp(f, d1.ParticleNumber[n])
             for i in range(d1.ParticleNumber[n]):
                 for j in range(cnlist[i, 0]):
                     QIJ[n][i] += QIJ0[n][cnlist[i, 1+j]]
-                QIJ[n][i] /= (1+cnlist[i, 0])
+                QIJ[n][i] /= (1+cnlist[i, 0])   
+                eigenvalues[i, n] = np.linalg.eig(QIJ[n][i])[0].max()   
+                traceII[i, n] = np.trace(np.matmul(QIJ[n][i], QIJ[n][i]))
         del QIJ0
         f.close()
+        traceII *= ndim / (ndim - 1)
+        traceII = np.sqrt(traceII)
     
     #calculate spatial correlation
     MAXBIN = int(d1.Boxlength[0].min() / 2.0 / rdelta)
-    results = np.zeros((MAXBIN, 2))
+    results = np.zeros((MAXBIN, 4))
     for n in range(d1.SnapshotNumber):
         hmatrixinv = np.linalg.inv(d1.hmatrix[n])
         for i in range(d1.ParticleNumber[n]-1):
@@ -135,20 +142,39 @@ def TensorialOrder(file_positions, file_orientations, neighborfile='', ndim=2, f
             Countvalue, BinEdge = np.histogram(distance, bins=MAXBIN, range=(0, MAXBIN*rdelta))
             results[:, 0] += Countvalue
 
+            #correlation I
             orderingsIJ = []
             for j in range(i+1, d1.ParticleNumber[n]):
                 medium = np.trace(np.matmul(QIJ[n][i], QIJ[n][j]))
                 orderingsIJ.append(medium)           
-            
             Countvalue, BinEdge = np.histogram(distance, bins=MAXBIN, range=(0, MAXBIN*rdelta), weights=orderingsIJ)
             results[:, 1] += Countvalue
 
+            #correlation II
+            orderingsIJ = eigenvalues[i+1:, n] * eigenvalues[i, n]
+            Countvalue, BinEdge = np.histogram(distance, bins=MAXBIN, range=(0, MAXBIN*rdelta), weights=orderingsIJ)
+            results[:, 2] += Countvalue
+
+            #correlation III
+            orderingsIJ = traceII[i+1:, n] * traceII[i, n]
+            Countvalue, BinEdge = np.histogram(distance, bins=MAXBIN, range=(0, MAXBIN*rdelta), weights=orderingsIJ)
+            results[:, 3] += Countvalue
+
     results[:, 1] /= results[:, 0]
+    results[:, 2] /= results[:, 0]
+    results[:, 3] /= results[:, 0]
     results[:, 0] = (BinEdge[1:] - 0.5*rdelta)
 
-    names = 'r Cr'
+    names = 'r QIJ QII_eig QII_trace'
     if outputfile:
         np.savetxt(outputfile, results, fmt='%.6f', header=names, comments='')
+
+        eigenvalues = np.column_stack((np.arange(d1.ParticleNumber[0])+1, eigenvalues))
+        fmt = '%d ' + ' %.6f' * (eigenvalues.shape[1] - 1)
+        np.savetxt(outputfile[:-4]+'_eigenvalues.dat', eigenvalues, fmt=fmt, header='n eig', comments='')
+        
+        traceII = np.column_stack((np.arange(d1.ParticleNumber[0])+1, traceII))
+        np.savetxt(outputfile[:-4]+'_traceCG.dat', traceII, fmt=fmt, header='n traceCG', comments='')
     
-    print ('--------calculate spatial correlation of nematic order over---------')
+    print ('--------calculate spatial correlation of tensor order over---------')
     return results, names
