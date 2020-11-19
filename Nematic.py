@@ -11,10 +11,13 @@ Authorinfo = """
 Docstr = """
          This module calculates the order parameters for the nematic
          liquid crystal phase
+
+         Ref. Allen & Frenkel Phys. Rev. Lett. 58, 1748 (1987) 
          """
 
 import numpy as np 
 from dumpAngular import readangular
+from dump import readdump
 
 
 def Legendre_polynomials(x, ndim):
@@ -81,4 +84,65 @@ def OrderParameters(files_orientation, ndim=2):
         P2 += Legendre_polynomials(medium, ndim).mean()
     P2 /= d.SnapshotNumber
 
-    return g2, Qij_total[0].max(), P2 #, P2_one#, Qij, P2==P2_one
+    return g2, Qij_total[0].max(), P2, P2_one #, P2_one#, Qij, P2==P2_one
+
+def g2correlation(file_positions, files_orientations, neighborfile='', ndim=2, filetype='lammps', moltypes='', rdelta=0.02, ppp=[1,1], outputfile=''):
+    """
+    calculate the spatial correlation version of the second-rank Kirkwood factor
+    """
+
+    #read positional information
+    d1 = readdump(file_positions, ndim, filetype, moltypes)
+    d1.read_onefile()
+
+    #read orientational information
+    d2 = readangular(files_orientations, ndim)
+    d2.read_onefile()
+
+    if d1.SnapshotNumber != d2.SnapshotNumber:
+        raise OSError('*****Positions and Orientations do NOT match*****')
+   
+    #coarse-grain the atomic orientation if neighbor list provided
+    if neighborfile:
+        from ParticleNeighbors import Voropp
+        vel0 = np.copy(d2.velocity) #keep original data unchanged during coarse-graining
+        f = open(neighborfile)
+        for n in range(d1.SnapshotNumber):
+            cnlist = Voropp(f, d1.ParticleNumber[n])
+            for i in range(d1.ParticleNumber[n]):
+                for j in range(cnlist[i, 0]):
+                    d2.velocity[n][i] += vel0[n][cnlist[i, 1+j]]
+                d2.velocity[n][i] /= (1+cnlist[i, 0])
+        f.close()
+        del vel0
+    
+    #calculate spatial correlation
+    MAXBIN = int(d1.Boxlength[0].min() / 2.0 / rdelta)
+    results = np.zeros((MAXBIN, 2))
+    for n in range(d1.SnapshotNumber):
+        hmatrixinv = np.linalg.inv(d1.hmatrix[n])
+        for i in range(d1.ParticleNumber[n]):
+            condition = np.arange(d1.ParticleNumber[n], dtype=np.int32) != i
+
+            RIJ      = d1.Positions[n][condition] - d1.Positions[n][i]
+            matrixij = np.dot(RIJ, hmatrixinv)
+            RIJ      = np.dot(matrixij-np.rint(matrixij)*ppp, d1.hmatrix[n]) #remove PBC
+            distance = np.linalg.norm(RIJ, axis=1)
+
+            Countvalue, BinEdge = np.histogram(distance, bins=MAXBIN, range=(0, MAXBIN*rdelta))
+            results[:, 0] += Countvalue
+
+            orderingsIJ = (d2.velocity[n][condition] * d2.velocity[n][i]).sum(axis=1)
+            orderingsIJ = Legendre_polynomials(orderingsIJ, ndim)         
+            Countvalue, BinEdge = np.histogram(distance, bins=MAXBIN, range=(0, MAXBIN*rdelta), weights=orderingsIJ)
+            results[:, 1] += Countvalue    
+
+        results[:, 1] /= results[:, 0]
+        results[:, 0] = (BinEdge[1:] - 0.5*rdelta)
+
+        names = 'r g2(r)'
+        if outputfile:
+            np.savetxt(outputfile, results, fmt='%.6f', header=names, comments='')
+        
+        print ('---------calculate spatial correlation of g2 over--------')
+        return results, names
