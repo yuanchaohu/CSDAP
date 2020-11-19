@@ -27,7 +27,11 @@ def lammps(step, atomnum, boxbounds, addson = ''):
     else:
         line += '%.6f %.6f\n' %(-0.5, 0.5)
 
-    line += 'ITEM: ATOMS id type x y z %s\n' %addson
+    if boxbounds.shape[0] == 3:  
+        line += 'ITEM: ATOMS id type x y z %s\n' %addson
+
+    if boxbounds.shape[0] == 2:  
+        line += 'ITEM: ATOMS id type x y %s\n' %addson
 
     return line
 
