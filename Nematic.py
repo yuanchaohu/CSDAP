@@ -49,7 +49,7 @@ def OrderParameters(files_orientation, ndim=2):
         for i in range(d.ParticleNumber[n]):
             condition = np.arange(d.ParticleNumber[n],dtype=np.int32) != i 
             uij = (d.velocity[n][i] * d.velocity[n][condition]).sum(axis=1)
-            g2 += Legendre_polynomials(uij, ndim).mean()
+            g2 += Legendre_polynomials(uij, ndim).sum()
         
         #tensorial order
         Qij_one = 0
@@ -81,4 +81,4 @@ def OrderParameters(files_orientation, ndim=2):
         P2 += Legendre_polynomials(medium, ndim).mean()
     P2 /= d.SnapshotNumber
 
-    return g2, Qij_total[0].max(), P2, P2_one
+    return g2, Qij_total[0].max(), P2 #, P2_one#, Qij, P2==P2_one
