@@ -130,3 +130,35 @@ def chi4(DV, ParticleNumber):
     """
 
     return ParticleNumber * ((DV**2).mean(axis = 1) - (DV.mean(axis = 1))**2)
+
+def MsdInstant(inputfile, ndim, filetype='lammps', moltypes='', everyn=1, ppp=[1,1,1], PBC=True, outputfile=''):
+    """
+    calculate the instantaneous mean squared displacement by
+    referencing to the previous 'everyn' configuration
+    """
+
+    print ('------Compute Instant MSD------')    
+
+    d = readdump(inputfile, ndim, filetype, moltypes)
+    d.read_onefile()
+
+    results = np.zeros((d.SnapshotNumber-everyn, 2))
+    names = 'n imsd'
+    
+    results[:, 0] = np.arange(results.shape[0]) + 1 
+
+    for n in range(d.SnapshotNumber-everyn):
+        RII = d.Positions[n+everyn] - d.Positions[n]
+        if PBC:
+            hmatrixinv = np.linalg.inv(d.hmatrix[n])
+            matrixij = np.dot(RII, hmatrixinv)
+            RII = np.dot(matrixij - np.rint(matrixij)*ppp, d.hmatrix[n]) #remove PBC
+        
+        results[n, 1] = np.square(RII).sum(axis=1).mean()
+    
+    if outputfile:
+        unitstep = d.TimeStep[everyn] - d.TimeStep[0]
+        np.savetxt(outputfile, results, fmt='%d %.6f', header=names, comments='TimeStep interval:%d\n'%unitstep)
+    
+    print('------Compute Instant MSD Over------')
+    return results, names
