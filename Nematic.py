@@ -84,7 +84,7 @@ def OrderParameters(files_orientation, ndim=2):
         P2 += Legendre_polynomials(medium, ndim).mean()
     P2 /= d.SnapshotNumber
 
-    return g2, Qij_total[0].max(), P2, P2_one #, P2_one#, Qij, P2==P2_one
+    return g2, Qij_total[0].max()*2, P2, P2_one #, P2_one#, Qij, P2==P2_one
 
 def g2correlation(file_positions, files_orientations, neighborfile='', ndim=2, filetype='lammps', moltypes='', rdelta=0.02, ppp=[1,1], outputfile=''):
     """
