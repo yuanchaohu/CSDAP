@@ -102,7 +102,7 @@ def S4(file_positions, file_orientations, ndim, X4time, filetype='lammps', molty
 
     #calculate dynamics and structure factor
     X4time = int(X4time / dt / TimeStep)
-    twopidl = 2 * pi / d1.Boxlength[0]
+    twopidl = 2 * pi / d1.Boxlength[0][0]
     Numofq = int(qrange / twopidl)
 
     wavevector = choosewavevector(Numofq, ndim) #Only S4(q) at low wavenumber range is interested
