@@ -226,7 +226,7 @@ class dynamics:
             Mean-square displacements msd; non-Gaussion parameter alpha2
         
             qmax is the wavenumber corresponding to the first peak of structure factor
-            qmax accounts for six components so it is a list
+            qmax accounts for six components so it is a list covering all particle types
             a is the cutoff for the overlap function, default is 1.0 (EAM) and 0.3(LJ) (0.3<d>)
             dt is the timestep of MD simulations
 
@@ -261,8 +261,8 @@ class dynamics:
                 RII_relative = RII.copy()
                 Neighborlist = Voropp(fneighbor, self.ParticleNumber) #neighbor list [number, list...]
                 for m in range(RII.shape[0]):
-                    for i in range(self.ParticleNumber):
-                        RII_relative[m, i] = RII[m,i]-RII[m, Neighborlist[i, 1: Neighborlist[i, 0] + 1]].mean(axis = 0) #cage relative displacements            
+                    for ii in range(self.ParticleNumber):
+                        RII_relative[m, ii] = RII[m,ii]-RII[m, Neighborlist[ii, 1: Neighborlist[ii, 0] + 1]].mean(axis = 0) #cage relative displacements            
                         #keep RII of each atom unchanged during subtraction
 
 
