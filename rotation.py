@@ -36,8 +36,8 @@ def CRtotal(filename, ndim = 3, dt = 0.002, outputfile = ''):
     if ParticleNumber != d.ParticleNumber[-1]:
         print ('Warning: ********particle number changes**********')
 
-    results  = np.zeros((d.SnapshotNumber - 1, 2))
-    names    = 't  CRt'
+    results  = np.zeros((d.SnapshotNumber - 1, 3))
+    names    = 't  CRt X4'
     cal_CRt  = pd.DataFrame(np.zeros(d.SnapshotNumber - 1)[np.newaxis, :])
     deltat   = np.zeros((d.SnapshotNumber - 1, 2), dtype = np.int)
     for n in range(d.SnapshotNumber - 1): #time interval
@@ -51,6 +51,7 @@ def CRtotal(filename, ndim = 3, dt = 0.002, outputfile = ''):
 
     results[:, 0] = deltat[:, 0] * TimeStep * dt
     results[:, 1] = cal_CRt.mean() / ParticleNumber
+    results[:, 2] = ((cal_CRt**2).mean()-(cal_CRt.mean())**2) / ParticleNumber
     if outputfile:
         np.savetxt(outputfile, results, fmt = '%.6f', header = names, comments = '')
 
