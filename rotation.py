@@ -58,6 +58,84 @@ def CRtotal(filename, ndim = 3, dt = 0.002, outputfile = ''):
     print ('-------calculate overall rotational dynamics over-------')
     return results, names
 
+def S4(file_positions, file_orientations, ndim, X4time, filetype='lammps', moltypes='', dt=0.002, phi=0.2, qrange=10, outputfile=''):
+    """ Compute four-point dynamic structure factor at peak timescale of dynamic susceptibility
+
+        Based on dynamics overlap function CRtotal and its corresponding dynamic susceptibility X4     
+        file_positions: atomic positions
+        file_orientations: atomic orientations
+        phi is the cutoff for the dynamics overlap function
+        X4time is the peaktime scale of X4
+        dt is the timestep in MD simulations
+        Dynamics should be calculated before computing S4
+        Only considered the particles which are rotationally slow
+    """
+    
+    print ('-----Compute dynamic S4(q) of rotational slow particles-----')
+    from WaveVector import choosewavevector
+    from dump import readdump
+    from math import pi
+
+    #read positions
+    d1 = readdump(file_positions, ndim, filetype, moltypes)
+    d1.read_onefile()
+
+    #read orientations
+    d2 = readangular(file_orientations, ndim)
+    d2.read_onefile()
+    #get unit vector
+    velocity = [u/np.linalg.norm(u, axis=1)[:, np.newaxis] for u in d2.velocity]
+
+    #check files
+    if d1.SnapshotNumber != d2.SnapshotNumber:
+        print ('warning: ******check configurations*****')
+    if d1.ParticleNumber[0] != d2.ParticleNumber[0]:
+        print('warning: ******check configurations*****')
+    if d1.TimeStep[0] != d2.TimeStep[0]:
+        print('warning: ******check configurations*****')
+    TimeStep = d1.TimeStep[1] - d1.TimeStep[0]
+    if TimeStep != d1.TimeStep[-1] - d1.TimeStep[-2]:
+        print('Warning: *****time interval changes*****')
+    ParticleNumber = d1.ParticleNumber[0]
+    if ParticleNumber != d1.ParticleNumber[-1]:
+        print('Warning: *****particle number changes*****')
+
+    #calculate dynamics and structure factor
+    X4time = int(X4time / dt / TimeStep)
+    twopidl = 2 * pi / d1.Boxlength[0]
+    Numofq = int(qrange / twopidl)
+
+    wavevector = choosewavevector(Numofq, ndim) #Only S4(q) at low wavenumber range is interested
+    qvalue, qcount = np.unique(wavevector[:, 0], return_counts = True)
+    sqresults = np.zeros((wavevector.shape[0], 2)) #the first row accouants for wavenumber
+
+    for n in range(d1.SnapshotNumber - X4time):
+        RII = (velocity[n+X4time] * velocity[n]).sum(axis=1)
+        RII = np.where(RII <= phi, 1, 0)
+        
+        sqtotal = np.zeros((wavevector.shape[0], 2))
+        for i in range(ParticleNumber):
+            medium = twopidl * (d1.Positions[n][i] * wavevector[:, 1:]).sum(axis = 1)
+            sqtotal[:, 0] += np.sin(medium) * RII[i]
+            sqtotal[:, 1] += np.cos(medium) * RII[i]
+        
+        sqresults[:, 1] += np.square(sqtotal).sum(axis = 1) / ParticleNumber
+        
+    sqresults[:, 0]  = wavevector[:, 0]
+    sqresults[:, 1] /= (d1.SnapshotNumber - X4time)
+    
+    sqresults = pd.DataFrame(sqresults)
+    results   = np.array(sqresults.groupby(sqresults[0]).mean())
+    
+    qvalue    = twopidl * np.sqrt(qvalue)
+    results   = np.column_stack((qvalue, results))
+    names = 'q  S4'
+    if outputfile:
+        np.savetxt(outputfile, results, fmt='%.6f', header = names, comments = '')
+
+    print ('--------- Compute S4(q) of slow particles over ------')
+    return results, names
+
 def logCRtotal(filename, ndim = 3, dt = 0.002, outputfile = ''):
     """calcualte rotational dynamics over all particles 
 
