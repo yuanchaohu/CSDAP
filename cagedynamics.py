@@ -219,6 +219,43 @@ class dynamics:
         print ('-----------------Compute Overall log Cage Relative Dynamics Over--------------------')
         return results, names
 
+    def InstantMSD(self, everyn=1, outputfile=''):
+        """ compute the cage-relative instant MSD with the previous configuration as reference
+
+            everyn: which configuration to be the reference, 1 means the former one
+        """
+        print('-----------------Compute Instant Cage Relative MSD--------------------')
+
+        results = np.zeros(((self.SnapshotNumber - everyn), 2))
+        names = 'n  imsd_CR'
+
+        results[:, 0] = np.arange(results.shape[0]) + 1
+
+        fneighbor = open(self.Neighborfile, 'r')
+        for n in range(self.SnapshotNumber-everyn):
+            RII = self.Positions[n+everyn] - self.Positions[n]
+            if self.PBC:
+                hmatrixinv = np.linalg.inv(self.hmatrix[n])    
+                matrixij = np.dot(RII, hmatrixinv)
+                RII = np.dot(matrixij - np.rint(matrixij) * self.ppp, self.hmatrix[n])  # remove PBC
+
+            RII_relative = RII.copy()
+            #consider neighbors' displacements; neighbor list [number, list...]
+            Neighborlist = Voropp(fneighbor, self.ParticleNumber)
+            for i in range(self.ParticleNumber):
+                # cage relative displacements
+                RII_relative[i] = RII[i]-RII[Neighborlist[i, 1: Neighborlist[i, 0] + 1]].mean(axis=0)
+                #keep RII of each atom unchanged during subtraction
+
+            results[n, 1] = np.square(RII_relative).sum(axis=1).mean()
+        fneighbor.close()
+
+        if outputfile:
+            unitstep = self.TimeStepall[everyn] - self.TimeStepall[0]
+            np.savetxt(outputfile, results, fmt='%d %.6f', header=names, comments='TimeStep interval:%d\n'%unitstep)
+
+        print('-----------------Compute Instant Cage Relative MSD Over--------------------')
+        return results, names
 
     def partial(self, qmax, a = 1.0, dt = 0.002, atomtype = False, outputfile = ''):
         """ Compute self-intermediate scattering functions ISF, dynamic susceptibility ISFX4 based on ISF
