@@ -111,7 +111,7 @@ def S4(file_positions, file_orientations, ndim, X4time, filetype='lammps', molty
 
     for n in range(d1.SnapshotNumber - X4time):
         RII = (velocity[n+X4time] * velocity[n]).sum(axis=1)
-        RII = np.where(np.abs(RII) <= phi, 1, 0)
+        RII = np.where(RII >= phi, 1, 0)
         
         sqtotal = np.zeros((wavevector.shape[0], 2))
         for i in range(ParticleNumber):
