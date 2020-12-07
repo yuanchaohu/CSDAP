@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd 
 from dumpAngular import readangular
 
-def CRtotal(filename, ndim = 3, dt = 0.002, outputfile = ''):
+def CRtotal(filename, ndim=3, dt=0.002, phi=0.2, outputfile = ''):
     """calcualte rotational dynamics over all particles by moving average
 
         the time interval should be the same for average with the same deltat
@@ -36,22 +36,28 @@ def CRtotal(filename, ndim = 3, dt = 0.002, outputfile = ''):
     if ParticleNumber != d.ParticleNumber[-1]:
         print ('Warning: ********particle number changes**********')
 
-    results  = np.zeros((d.SnapshotNumber - 1, 3))
-    names    = 't  CRt X4'
+    results  = np.zeros((d.SnapshotNumber - 1, 5))
+    names    = 't  CRt X4 Qt QtX4'
     cal_CRt  = pd.DataFrame(np.zeros(d.SnapshotNumber - 1)[np.newaxis, :])
+    cal_Qt   = pd.DataFrame(np.zeros(d.SnapshotNumber - 1)[np.newaxis, :])
     deltat   = np.zeros((d.SnapshotNumber - 1, 2), dtype = np.int)
     for n in range(d.SnapshotNumber - 1): #time interval
-        CII     = velocity[n+1:] * velocity[n]
-        CII_CRt = (CII.sum(axis = 2)).sum(axis = 1)
+        CII     = (velocity[n+1:] * velocity[n]).sum(axis=2)
+        CII_CRt = CII.sum(axis = 1)
         cal_CRt = pd.concat([cal_CRt, pd.DataFrame(CII_CRt[np.newaxis, :])])
+        CII_Qt  = (CII >= phi).sum(axis=1)
+        cal_Qt  = pd.concat([cal_Qt, pd.DataFrame(CII_Qt[np.newaxis, :])])
 
     cal_CRt = cal_CRt.iloc[1:]
+    cal_Qt  = cal_Qt.iloc[1:]
     deltat[:, 0] = np.array(cal_CRt.columns) + 1 #time interval
     deltat[:, 1] = np.array(cal_CRt.count())     #time interval frequency
 
     results[:, 0] = deltat[:, 0] * TimeStep * dt
     results[:, 1] = cal_CRt.mean() / ParticleNumber
     results[:, 2] = ((cal_CRt**2).mean()-(cal_CRt.mean())**2) / ParticleNumber
+    results[:, 3] = cal_Qt.mean() / ParticleNumber
+    results[:, 4] = ((cal_Qt**2).mean()-(cal_Qt.mean())**2) / ParticleNumber
     if outputfile:
         np.savetxt(outputfile, results, fmt = '%.6f', header = names, comments = '')
 
