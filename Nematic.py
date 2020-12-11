@@ -18,6 +18,7 @@ Docstr = """
 import numpy as np 
 from dumpAngular import readangular
 from dump import readdump
+from ParticleNeighbors import Voropp
 
 
 def Legendre_polynomials(x, ndim):
@@ -146,3 +147,66 @@ def g2correlation(file_positions, files_orientations, neighborfile='', ndim=2, f
         
         print ('---------calculate spatial correlation of g2 over--------')
         return results, names
+
+
+def LocalOrder(file_positions, file_orientations, neighborfile='', ndim=2, filetype='lammps', moltypes='', ppp=[1, 1], eigvals='False', outputfile=''):
+    """
+    calculate local nematic ordering based on dipoles/spins/ or molecular orientation
+    based on the tensorial order parameter Q_ij used for liquid crystal phase
+    
+    Ref. Zapotocky et al. Phys. Rev. E 51, 1216 (1995)
+    """
+
+    #read positional information
+    d1 = readdump(file_positions, ndim, filetype, moltypes)
+    d1.read_onefile()
+
+    #read orientational information
+    d2 = readangular(file_orientations, ndim)
+    d2.read_onefile()
+
+    if d1.SnapshotNumber != d2.SnapshotNumber:
+        raise OSError('*****Positions and Orienations do NOT match*****')
+
+    #calculate atomic-level tensorial order
+    QIJ = []
+    for n in range(d1.SnapshotNumber):
+        medium = np.zeros((d1.ParticleNumber[n], ndim, ndim))
+        for i in range(d1.ParticleNumber[n]):
+            mu = d2.velocity[n][i]
+            for x in range(ndim):
+                for y in range(ndim):
+                    medium[i, x, y] = (
+                        ndim*mu[x]*mu[y]-Kronecker_delta(x, y))/2
+        QIJ.append(medium)
+
+    #coarse-graining over certain volume if neighbor list provided
+    if eigvals:
+        eigenvalues = np.zeros((d1.ParticleNumber[0], d1.SnapshotNumber))
+    traceII = np.zeros((d1.ParticleNumber[0], d1.SnapshotNumber))
+    if neighborfile:
+        # keep the original data unchanged during coarse-graining
+        QIJ0 = np.copy(QIJ)
+        f = open(neighborfile)
+        for n in range(d1.SnapshotNumber):
+            cnlist = Voropp(f, d1.ParticleNumber[n])
+            for i in range(d1.ParticleNumber[n]):
+                for j in range(cnlist[i, 0]):
+                    QIJ[n][i] += QIJ0[n][cnlist[i, 1+j]]
+                QIJ[n][i] /= (1+cnlist[i, 0])
+                traceII[i, n] = np.trace(np.matmul(QIJ[n][i], QIJ[n][i]))
+                if eigvals:
+                    eigenvalues[i, n] = np.linalg.eig(QIJ[n][i])[0].max()*2.0               
+        del QIJ0
+        f.close()
+        traceII *= ndim / (ndim - 1)
+        traceII = np.sqrt(traceII)
+
+    fmt = '%d ' + ' %.6f' * (traceII.shape[1] - 1)
+    traceII = np.column_stack((np.arange(d1.ParticleNumber[0])+1, traceII))
+    np.savetxt(outputfile, traceII, fmt=fmt, header='n traceCG', comments='')
+    if eigvals:
+        eigenvalues = np.column_stack((np.arange(d1.ParticleNumber[0])+1, eigenvalues))
+        np.savetxt(outputfile[:-4]+'_eigenvalues.dat', eigenvalues, fmt=fmt, header='n eig', comments='')
+
+    print ('------calculate nematic ordering done------')
