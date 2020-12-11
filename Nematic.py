@@ -149,7 +149,7 @@ def g2correlation(file_positions, files_orientations, neighborfile='', ndim=2, f
         return results, names
 
 
-def LocalOrder(file_positions, file_orientations, neighborfile='', ndim=2, filetype='lammps', moltypes='', ppp=[1, 1], eigvals='False', outputfile=''):
+def LocalOrder(file_positions, file_orientations, neighborfile='', ndim=2, filetype='lammps', moltypes='', ppp=[1, 1], eigvals=False, outputfile=''):
     """
     calculate local nematic ordering based on dipoles/spins/ or molecular orientation
     based on the tensorial order parameter Q_ij used for liquid crystal phase
@@ -202,8 +202,8 @@ def LocalOrder(file_positions, file_orientations, neighborfile='', ndim=2, filet
         traceII *= ndim / (ndim - 1)
         traceII = np.sqrt(traceII)
 
-    fmt = '%d ' + ' %.6f' * (traceII.shape[1] - 1)
     traceII = np.column_stack((np.arange(d1.ParticleNumber[0])+1, traceII))
+    fmt = '%d ' + ' %.6f' * (traceII.shape[1] - 1)
     np.savetxt(outputfile, traceII, fmt=fmt, header='n traceCG', comments='')
     if eigvals:
         eigenvalues = np.column_stack((np.arange(d1.ParticleNumber[0])+1, eigenvalues))
