@@ -39,7 +39,7 @@ def Filon_COS(C, t, a=0, outputfile=''):
         a = 2 * pi / t[-1]
     
     Nmax = len(C)
-    dt = t[1] - t[0]
+    dt = round(t[1] - t[0], 3)
     if dt != round(t[-1]-t[-2], 3):
         raise ValueError('time is not evenly distributed')
 
