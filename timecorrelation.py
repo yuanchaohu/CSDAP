@@ -100,7 +100,7 @@ def logOrderlife(dumpfile, orderings, ndim=3, dt=0.002, outputfile='', filetype=
     return results, names
 
 
-def Orderlife_FT(dumpfile, orderings, qvector, ndim=3, dt=0.002, outputfile='', filetype='lammps', moltypes='', normalization=True):
+def Orderlife_FT(dumpfile, orderings, qvector, ndim=3, dt=0.002, outputfile='', filetype='lammps', moltypes='', normalization=False):
     """calculate the time decay of structural ordering in reciprocal space
         by Fourier Transformation
 
