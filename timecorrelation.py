@@ -100,7 +100,7 @@ def logOrderlife(dumpfile, orderings, ndim=3, dt=0.002, outputfile='', filetype=
     return results, names
 
 
-def Orderlife_FT(dumpfile, orderings, qvector, ndim=3, dt=0.002, outputfile='', filetype='lammps', moltypes=''):
+def Orderlife_FT(dumpfile, orderings, qvector, ndim=3, dt=0.002, outputfile='', filetype='lammps', moltypes='', normalization=True):
     """calculate the time decay of structural ordering in reciprocal space
         by Fourier Transformation
 
@@ -134,8 +134,11 @@ def Orderlife_FT(dumpfile, orderings, qvector, ndim=3, dt=0.002, outputfile='', 
     cosparts = np.zeros_like(sinparts)
     for n in range(d.SnapshotNumber):
         theta = (qvector * d.Positions[n]).sum(axis=1)
-        sinparts[n] = np.sum(orderings[:, n]*np.sin(theta))/orderings[:, n].sum()
-        cosparts[n] = np.sum(orderings[:, n]*np.cos(theta))/orderings[:, n].sum()
+        sinparts[n] = np.sum(orderings[:, n]*np.sin(theta)) #/orderings[:, n].sum()
+        cosparts[n] = np.sum(orderings[:, n]*np.cos(theta)) #/orderings[:, n].sum()
+        if normalization:
+            sinparts[n] /= orderings[:, n].sum()
+            cosparts[n] /= orderings[:, n].sum()
     
     #calculate time correlation
     results = np.zeros((d.SnapshotNumber, 2))
@@ -147,9 +150,10 @@ def Orderlife_FT(dumpfile, orderings, qvector, ndim=3, dt=0.002, outputfile='', 
     
     results[:, 1] /= counts
     results[:, 0] = (np.array(d.TimeStep)-d.TimeStep[0])*dt
+    results[:, 1] /= results[0, 1]
     
     if outputfile:
-        np.savetxt(outputfile, results, fmt='%.6f', header='t Sqt', comments='qvalue=%.3f; length=%.3f\n'%(qvalue, 2.0*np.pi/qvalue))
+        np.savetxt(outputfile, results, fmt='%.8f', header='t Sqt', comments='qvalue=%.3f; length=%.3f\n'%(qvalue, 2.0*np.pi/qvalue))
     
     print("------Calculate Order time self-correlation by FFT Over------")
     return results, qvalue
