@@ -181,6 +181,67 @@ def velocity_angular_autocorrelation(inputfile, numofconfig, ndim=2, Nevery=1, d
 
     print('-----Calculate velocity-angular autocorrelation function DONE-----')
 
+
+def velocity_angular_autocorrelation_BOTH(inputfile, numofconfig, ndim=2, Nevery=1, dt=0.002, mass=1.0, inertia=0, outputfile1='', outputfile2=''):
+    """calculate velocity-velocity including angular motion autocorrelation function
+    
+    if the mass of different particle types is not the same,
+    it should be a column numpy array in the shape of (numofatom, 1)
+    Nevery defines the frequency of reading a trajectory file
+
+    output results w/o angular part to save computation time
+
+    inertia is the moment of inertia of spheres
+    see http://hyperphysics.phy-astr.gsu.edu/hbase/mi.html
+    The definition of inertia should be the same as mass
+    """
+
+    #read dump file
+    f = open(inputfile)
+    print('reading input file...')
+    AllTime = []
+    velocity = []
+    angular = []
+    for n in range(numofconfig):
+        if n % Nevery == 0:
+            TimeStep, NumofAtom, BoxLength, Positions, Velocities = read_file(f, ndim)
+            AllTime.append(TimeStep)
+            velocity.append(Velocities)
+            angular.append(Positions)
+        else:
+            skip_file(f)
+    f.close()
+
+    numofconfig = numofconfig // Nevery
+    AllTime = np.array(AllTime)[:numofconfig]
+    results = np.zeros(numofconfig)
+    results1 = np.zeros(numofconfig)
+    counts = np.zeros(numofconfig)
+
+    for n in range(numofconfig):
+        print(n)
+        for nn in range(n+1):  # time interval
+            T = (mass * velocity[n] * velocity[n-nn]).sum()  # translational
+            R = (inertia*angular[n]*angular[n-nn]).sum()  # rotational
+            results[nn] += T
+            results1[nn] += T + R
+            counts[nn] += 1
+
+    condition = counts > 100  # (numofconfig//2)
+    Times = (AllTime[condition] - AllTime[0]) * dt
+    results = results[condition] / counts[condition] / NumofAtom
+    results /= results[0]  # normalization
+    np.savetxt(outputfile1, np.column_stack((Times, results)),
+               fmt='%.3f %.6f', comments='', header='t C_V(t)')
+
+    results1 = results1[condition] / counts[condition] / NumofAtom
+    results1 /= results1[0]  # normalization
+    np.savetxt(outputfile2, np.column_stack((Times, results1)),
+               fmt='%.3f %.6f', comments='', header='t C_V(t)')
+
+    print('-----Calculate velocity-angular autocorrelation function DONE-----')
+
+
 def Current_autocorrelation(inputfile, numofconfig, qvector, Nevery=1, dt=0.002, Tfile='', Lfile=''):
     """Calculate longitudinal and transverse current-current autocorrelation function
     
