@@ -153,7 +153,7 @@ def Orderlife_FT(dumpfile, orderings, qvector, ndim=3, dt=0.002, outputfile='', 
     results[:, 1] /= results[0, 1]
     
     if outputfile:
-        np.savetxt(outputfile, results, fmt='%.8f', header='t Sqt', comments='qvalue=%.3f; length=%.3f\n'%(qvalue, 2.0*np.pi/qvalue))
+        np.savetxt(outputfile, results, fmt='%.6f', header='t Sqt', comments='qvalue=%.3f; length=%.3f\n'%(qvalue, 2.0*np.pi/qvalue))
     
     print("------Calculate Order time self-correlation by FFT Over------")
     return results, qvalue
