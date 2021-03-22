@@ -108,33 +108,33 @@ def S4(file_positions, file_orientations, ndim, X4time, filetype='lammps', molty
 
     #calculate dynamics and structure factor
     X4time = int(X4time / dt / TimeStep)
-    twopidl = 2 * pi / d1.Boxlength[0][0]
-    Numofq = int(qrange / twopidl)
-
-    wavevector = choosewavevector(Numofq, ndim) #Only S4(q) at low wavenumber range is interested
-    qvalue, qcount = np.unique(wavevector[:, 0], return_counts = True)
-    sqresults = np.zeros((wavevector.shape[0], 2)) #the first row accouants for wavenumber
+    
+    twopidl = 2 * pi / d1.Boxlength[0] #list over dimensions
+    Numofq = int(qrange / twopidl.max())
+    wavevector = choosewavevector(Numofq, ndim)[:, 1:] #Only S4(q) at low wavenumber range is interested
+    wavevector = wavevector.astype(np.float64) * twopidl[np.newaxis, :] #considering non-cubic box
+    wavenumber = np.linalg.norm(wavevector, axis=1)
+    
+    sqresults = np.zeros((wavevector.shape[0], 2))
+    sqresults[:, 0] = wavenumber
 
     for n in range(d1.SnapshotNumber - X4time):
         RII = (velocity[n+X4time] * velocity[n]).sum(axis=1)
         RII = np.where(RII >= phi, 1, 0)
         
-        sqtotal = np.zeros((wavevector.shape[0], 2))
+        sqtotal = np.zeros_like(sqresults)
         for i in range(ParticleNumber):
-            medium = twopidl * (d1.Positions[n][i] * wavevector[:, 1:]).sum(axis = 1)
-            sqtotal[:, 0] += np.sin(medium) * RII[i]
-            sqtotal[:, 1] += np.cos(medium) * RII[i]
+            if RII[i]:
+                thetas = (d1.Positions[n][i][np.newaxis, :] * wavevector).sum(axis=1)
+                sqtotal[:, 0] += np.sin(thetas)
+                sqtotal[:, 1] += np.cos(thetas)
         
-        sqresults[:, 1] += np.square(sqtotal).sum(axis = 1) / ParticleNumber
-        
-    sqresults[:, 0]  = wavevector[:, 0]
+        sqresults[:, 1] += np.square(sqtotal).sum(axis=1) / ParticleNumber
     sqresults[:, 1] /= (d1.SnapshotNumber - X4time)
     
-    sqresults = pd.DataFrame(sqresults)
-    results   = np.array(sqresults.groupby(sqresults[0]).mean())
+    sqresults = pd.DataFrame(sqresults).round(6)
+    results = sqresults.groupby(sqresults[0]).mean().reset_index().values
     
-    qvalue    = twopidl * np.sqrt(qvalue)
-    results   = np.column_stack((qvalue, results))
     names = 'q  S4'
     if outputfile:
         np.savetxt(outputfile, results, fmt='%.6f', header = names, comments = '')
@@ -168,7 +168,7 @@ def logCRtotal(filename, ndim = 3, dt = 0.002, outputfile = ''):
     print ('-------calculate LOG overall rotational dynamics over-------')
     return results, names
 
-def Rorder(filename, ndim = 3, neighborfile = '', outputfile = ''):
+def Rorder(filename, ndim = 3, neighborfile = '', outputfile = '', use_abs=True):
     """rotational order parameter to characterize the structure
 
     local rotational symmetry over the nearest neighbors
@@ -188,10 +188,12 @@ def Rorder(filename, ndim = 3, neighborfile = '', outputfile = ''):
         Neighborlist = Voropp(fneighbor, d.ParticleNumber[n]) ##neighbor list [number, list....]
         for i in range(d.ParticleNumber[n]):
             CII = velocity[n][i] * velocity[n][Neighborlist[i, 1:1 + Neighborlist[i, 0]]]
-            #psi = np.linalg.norm(CII, axis = 1).sum()
-            #results[i, n] = psi / Neighborlist[i, 0]
-            results[i, n] = np.abs(CII.sum(axis = 1)).mean()
+            if use_abs:
+                results[i, n] = np.abs(CII.sum(axis = 1)).mean()
+            else:
+                results[i, n] = (CII.sum(axis=1)).mean()
 
+    fneighbor.close()
     results = np.column_stack((np.arange(d.ParticleNumber[0])+1, results))
     if outputfile:
         names = 'id Psi'
@@ -233,6 +235,7 @@ def RorderIJ(filename, ndim = 3, UIJ = 0.9, neighborfile = '', outputfile = '', 
                     fij.write('%.6f ' %psi[j])
                 fij.write('\n')
 
+    fneighbor.close()
     results = np.column_stack((np.arange(d.ParticleNumber[0])+1, results))
     if outputfile:
         names = 'id UIJ'

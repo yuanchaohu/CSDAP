@@ -236,12 +236,15 @@ class dynamics:
         print ('-----------------Compute dynamic S4(q) of slow particles --------------')
 
         X4time = int(X4time / dt / self.TimeStep)
-        twopidl = 2 * pi / self.Boxlength[0]
-        Numofq = int(qrange / twopidl)
-
-        wavevector = choosewavevector(Numofq, self.ndim) #Only S4(q) at low wavenumber range is interested
-        qvalue, qcount = np.unique(wavevector[:, 0], return_counts = True)
-        sqresults = np.zeros((len(wavevector[:, 0]), 3)) #the first row accouants for wavenumber
+        
+        twopidl = 2 * pi / self.Boxlength
+        Numofq = int(qrange / twopidl.max())
+        wavevector = choosewavevector(Numofq, self.ndim)[:, 1:] #Only S4(q) at low wavenumber range is interested
+        wavevector = wavevector.astype(np.float64) * twopidl[np.newaxis, :] #considering non-cubic box
+        wavenumber = np.linalg.norm(wavevector, axis=1)
+        
+        sqresults = np.zeros((wavevector.shape[0], 2))
+        sqresults[:, 0] = wavenumber
 
         for n in range(self.SnapshotNumber - X4time):
             RII = self.Positions[n + X4time] - self.Positions[n]
@@ -250,30 +253,23 @@ class dynamics:
                 matrixij   = np.dot(RII, hmatrixinv)
                 RII        = np.dot(matrixij - np.rint(matrixij) * self.ppp, self.hmatrix[n]) #remove PBC
 
-            #RII = np.square(RII).sum(axis = 1)
-            #RII = np.where(np.sqrt(RII) <= a, 1, 0)
             RII = np.linalg.norm(RII, axis = 1)
             RII = np.where(RII <= a, 1, 0)
-            sqtotal = np.zeros((len(wavevector[:, 0]), 2))
-            for i in range(self.ParticleNumber):
-                medium   = twopidl * (self.Positions[n][i] * wavevector[:, 1:]).sum(axis = 1)
-                sqtotal[:, 0] += np.sin(medium) * RII[i]
-                sqtotal[:, 1] += np.cos(medium) * RII[i]
             
-            sqresults[:, 1] += np.square(sqtotal).sum(axis = 1) / self.ParticleNumber
-            sqresults[:, 2] += sqtotal[:, 1]
-
-        sqresults[:, 0]  = wavevector[:, 0]
-        sqresults[:, 1]  = sqresults[:, 1] / (self.SnapshotNumber - X4time)
-        sqresults[:, 2]  = np.square(sqresults[:, 2] / (self.SnapshotNumber - X4time)) / self.ParticleNumber
-
-        sqresults = pd.DataFrame(sqresults)
-        results   = np.array(sqresults.groupby(sqresults[0]).mean())
-        results[:, 1] = results[:, 0] - results[:, 1] / qcount
-
-        qvalue    = twopidl * np.sqrt(qvalue)
-        results   = np.column_stack((qvalue, results))
-        names = 'q  S4a(q)  S4b(q)'
+            sqtotal = np.zeros_like(sqresults)
+            for i in range(self.ParticleNumber):
+                if RII[i]:
+                    thetas = (self.Positions[n][i][np.newaxis, :] * wavevector).sum(axis=1)
+                    sqtotal[:, 0] += np.sin(thetas)
+                    sqtotal[:, 1] += np.cos(thetas)
+            
+            sqresults[:, 1] += np.square(sqtotal).sum(axis=1) / self.ParticleNumber
+        sqresults[:, 1] /= (self.SnapshotNumber - X4time)
+        
+        sqresults = pd.DataFrame(sqresults).round(6)
+        results = sqresults.groupby(sqresults[0]).mean().reset_index().values
+        
+        names = 'q  S4'
         if outputfile:
             np.savetxt(outputfile, results, fmt='%.6f', header = names, comments = '')
 
@@ -323,12 +319,14 @@ class dynamics:
             np.savetxt('Dynamics.' + outputfile, results, fmt='%.6f', header = names, comments = '')
 
         #-----------calculte S4(q) of fast particles----------------
-        twopidl = 2 * pi / self.Boxlength[0]
-        Numofq = int(qrange / twopidl)
+        twopidl = 2 * pi / self.Boxlength
+        Numofq = int(qrange / twopidl.max())
+        wavevector = choosewavevector(Numofq, self.ndim)[:, 1:] #Only S4(q) at low wavenumber range is interested
+        wavevector = wavevector.astype(np.float64) * twopidl[np.newaxis, :]
+        wavenumber = np.linalg.norm(wavevector, axis=1)
 
-        wavevector = choosewavevector(Numofq, self.ndim) #Only S4(q) at low wavenumber range is interested
-        qvalue, qcount = np.unique(wavevector[:, 0], return_counts = True)
-        sqresults = np.zeros((len(wavevector[:, 0]), 3)) #the first row accouants for wavenumber
+        sqresults = np.zeros((wavevector.shape[0], 2))
+        sqresults[:, 0] = wavenumber
 
         if X4timeset:
             X4time = int(X4timeset / dt / self.TimeStep)
@@ -342,30 +340,23 @@ class dynamics:
                 matrixij   = np.dot(RII, hmatrixinv)
                 RII        = np.dot(matrixij - np.rint(matrixij) * self.ppp, self.hmatrix[n]) #remove PBC
 
-            #RII = np.square(RII).sum(axis = 1)
-            #RII = np.where(np.sqrt(RII) >= a, 1, 0)
             RII = np.linalg.norm(RII, axis = 1)
             RII = np.where(RII >= a, 1, 0)
-            sqtotal = np.zeros((len(wavevector[:, 0]), 2))
-            for i in range(self.ParticleNumber):
-                medium   = twopidl * (self.Positions[n][i] * wavevector[:, 1:]).sum(axis = 1)
-                sqtotal[:, 0] += np.sin(medium) * RII[i]
-                sqtotal[:, 1] += np.cos(medium) * RII[i]
             
-            sqresults[:, 1] += np.square(sqtotal).sum(axis = 1) / self.ParticleNumber
-            sqresults[:, 2] += sqtotal[:, 1]
-
-        sqresults[:, 0]  = wavevector[:, 0]
-        sqresults[:, 1]  = sqresults[:, 1] / (self.SnapshotNumber - X4time)
-        sqresults[:, 2]  = np.square(sqresults[:, 2] / (self.SnapshotNumber - X4time)) / self.ParticleNumber
-
-        sqresults = pd.DataFrame(sqresults)
-        results   = np.array(sqresults.groupby(sqresults[0]).mean())
-        results[:, 1] = results[:, 0] - results[:, 1] / qcount
-
-        qvalue    = twopidl * np.sqrt(qvalue)
-        results   = np.column_stack((qvalue, results))
-        names = 'q  S4a(q)  S4b(q)'
+            sqtotal = np.zeros_like(sqresults)
+            for i in range(self.ParticleNumber):
+                if RII[i]:
+                    thetas = (self.Positions[n][i][np.newaxis, :] * wavevector).sum(axis=1)
+                    sqtotal[:, 0] += np.sin(thetas)
+                    sqtotal[:, 1] += np.cos(thetas)
+            
+            sqresults[:, 1] += np.square(sqtotal).sum(axis=1) / self.ParticleNumber
+        sqresults[:, 1] /= (self.SnapshotNumber - X4time)
+        
+        sqresults = pd.DataFrame(sqresults).round(6)
+        results = sqresults.groupby(sqresults[0]).mean().reset_index().values
+        
+        names = 'q  S4'
         if outputfile:
             np.savetxt(outputfile, results, fmt='%.6f', header = names, comments = '')
 

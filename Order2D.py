@@ -25,7 +25,7 @@ from   ParticleNeighbors import Voropp
 class BOO2D:
     """ Compute Bond Orientational Order in two dimension """
 
-    def __init__(self, dumpfile, Neighborfile, filetype = 'lammps', moltypes = '', *arg):
+    def __init__(self, dumpfile, Neighborfile, edgelengthfile='', filetype = 'lammps', moltypes = '', *arg):
         """
         The keyword filetype is used for different MD engines
         It has four choices:
@@ -39,13 +39,19 @@ class BOO2D:
         'gsd' (HOOMD-blue standard output for static properties)
     
         'gsd_dcd' (HOOMD-blue outputs for static and dynamic properties)
+
+        edgelengthfile: filename of voronoi cell bonds lengths for each particle
+        w.r.t its neighbors, like the face area in 3D. This can be used to weight
+        the order parameter; provide False if do not want to weight. (default)
         """
+        
         self.dumpfile = dumpfile
         self.filetype = filetype
         self.moltypes = moltypes
         d = readdump(self.dumpfile, 2, self.filetype, self.moltypes) #only at two dimension
         d.read_onefile()
         self.Neighborfile = Neighborfile
+        self.edgelengthfile = edgelengthfile
 
         if len(d.TimeStep) > 1:
             self.TimeStep     = d.TimeStep[1] - d.TimeStep[0]
@@ -69,6 +75,11 @@ class BOO2D:
         print ('Particle TypeNumber:', self.TypeNumber)
         if np.sum(self.TypeNumber) != self.ParticleNumber:
             print ('Warning: ****** Sum of Indivdual Types is Not the Total Amount*******')
+        
+        if self.edgelengthfile:
+            print ('----Bond orientational order will be weighted by Voronoi bond lengths----')
+        else:
+            print ('----Non-weighting is using----')
 
     def lthorder(self, l = 6, ppp = [1, 1]):
         """ Calculate l-th order in 2D, such as hexatic order
@@ -78,19 +89,34 @@ class BOO2D:
         """
 
         fneighbor = open(self.Neighborfile, 'r')
+        if self.edgelengthfile: 
+            fbondlength = open(self.edgelengthfile)
+        
         results = np.zeros((self.SnapshotNumber, self.ParticleNumber), dtype = np.complex128)
         for n in range(self.SnapshotNumber):
             hmatrixinv   = np.linalg.inv(self.hmatrix[n])
             Neighborlist = Voropp(fneighbor, self.ParticleNumber) #neighbor list [number, list...]
-            for i in range(self.ParticleNumber):
-                RIJ = self.Positions[n, Neighborlist[i, 1: Neighborlist[i, 0] + 1]] - self.Positions[n, i]
-                #periodic = np.where(np.abs(RIJ / self.Boxlength[np.newaxis, :]) > 0.5, np.sign(RIJ), 0).astype(np.int)
-                #RIJ -= self.Boxlength * periodic * ppp #remove PBC
-                matrixij = np.dot(RIJ, hmatrixinv)
-                RIJ      = np.dot(matrixij - np.rint(matrixij) * ppp, self.hmatrix[n]) #remove PBC
-                theta    = np.arctan2(RIJ[:, 1], RIJ[:, 0])
-                results[n, i] = (np.exp(1j * l * theta)).mean()
+            if not self.edgelengthfile:
+                for i in range(self.ParticleNumber):
+                    RIJ = self.Positions[n, Neighborlist[i, 1: Neighborlist[i, 0] + 1]] - self.Positions[n, i]
+                    matrixij = np.dot(RIJ, hmatrixinv)
+                    RIJ      = np.dot(matrixij - np.rint(matrixij) * ppp, self.hmatrix[n]) #remove PBC
+                    theta    = np.arctan2(RIJ[:, 1], RIJ[:, 0])
+                    results[n, i] = (np.exp(1j * l * theta)).mean()
+            else:
+                bondlengthlist = Voropp(fbondlength, self.ParticleNumber)
+                for i in range(self.ParticleNumber):
+                    RIJ = self.Positions[n, Neighborlist[i, 1: Neighborlist[i, 0] + 1]] - self.Positions[n, i]
+                    matrixij = np.dot(RIJ, hmatrixinv)
+                    RIJ      = np.dot(matrixij - np.rint(matrixij) * ppp, self.hmatrix[n]) #remove PBC
+                    theta    = np.arctan2(RIJ[:, 1], RIJ[:, 0])
+                    weights  = bondlengthlist[i, 1:Neighborlist[i, 0] + 1] + 1.0
+                    weights /= weights.sum()
+                    results[n, i] = (weights*np.exp(1j * l * theta)).sum()
 
+        fneighbor.close()
+        if self.edgelengthfile:
+            fbondlength.close()
         return results #complex number in array
 
     def tavephi(self, outputphi = '', outputavephi = '', avet = 0, l = 6, ppp = [1, 1], dt = 0.002):
@@ -107,14 +133,17 @@ class BOO2D:
 
         results = np.abs(self.lthorder(l, ppp))
 
-        if outputphi:
+        if avet==0:
             #compute absolute phi
-            names = 'id   phil=' + str(l)
             ParticlePhi = np.column_stack((np.arange(self.ParticleNumber) + 1, results.T))
-            numformat = '%d ' + '%.6f ' * (len(ParticlePhi[0]) - 1)
-            np.savetxt(outputphi, ParticlePhi, fmt= numformat, header = names, comments = '')
+            if outputphi:
+                names = 'id   phil=' + str(l)
+                numformat = '%d ' + '%.6f ' * (len(ParticlePhi[0]) - 1)
+                np.savetxt(outputphi, ParticlePhi, fmt= numformat, header = names, comments = '')
+            print('---------Compute Particle Level PHI Over------------')
+            return ParticlePhi
 
-        if outputavephi:
+        else:
             #compute time averaged phi
             avet = int(avet / dt / self.TimeStep)
             averesults = np.zeros((self.SnapshotNumber - avet, self.ParticleNumber))
@@ -122,11 +151,12 @@ class BOO2D:
                 averesults[n] = results[n: n + avet].mean(axis = 0)
 
             averesults = np.column_stack((np.arange(self.ParticleNumber) + 1, averesults.T))
-            names   = 'id   ave_phil=' + str(l)
-            numformat = '%d ' + '%.6f ' * (len(averesults[0]) - 1) 
-            np.savetxt(outputavephi, averesults, fmt = numformat, header = names, comments = '')
-
-        print ('---------Compute Particle Level PHI Over------------')
+            if outputavephi:
+                names   = 'id   ave_phil=' + str(l)
+                numformat = '%d ' + '%.6f ' * (len(averesults[0]) - 1) 
+                np.savetxt(outputavephi, averesults, fmt = numformat, header = names, comments = '')
+            print ('---------Compute Particle Level PHI Over------------')
+            return averesults
 
     def spatialcorr(self, l = 6, ppp = [1, 1], rdelta = 0.01, outputfile = ''):
         """ Calculate spatial correlation of bond orientational order

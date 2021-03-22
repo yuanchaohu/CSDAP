@@ -198,7 +198,7 @@ def partialSq(inputfile, selection, ndim = 3, filetype = 'lammps', moltypes = ''
     """
 
     print ('--------Calculate Conditional S(q)-----------')
-    from structurefactors import choosewavevector #(Numofq, ndim)
+    from WaveVector import choosewavevector #(Numofq, ndim)
 
     d = readdump(inputfile, ndim, filetype, moltypes)
     d.read_onefile()
@@ -207,32 +207,30 @@ def partialSq(inputfile, selection, ndim = 3, filetype = 'lammps', moltypes = ''
         errorinfo = '***inconsistent number of configurations and atom selection***'
         raise ValueError(errorinfo)
 
-    twopidl    = 2 * np.pi / d.Boxlength[0][0]
-    Numofq = int(qrange / twopidl)
-    wavevector = choosewavevector(Numofq, ndim)
-    qvalue, qcount = np.unique(wavevector[:, 0], return_counts = True)
-    sqresults = np.zeros((len(wavevector[:, 0]), 2)) #the first row accouants for wavenumber
+    twopidl = 2 * np.pi / d.Boxlength[0]
+    Numofq = int(qrange / twopidl.max())
+    wavevector = choosewavevector(Numofq, ndim)[:, 1:]
+    wavevector = wavevector.astype(np.float64) * twopidl[np.newaxis, :]
+    wavenumber = np.linalg.norm(wavevector, axis=1)
+
+    sqresults = np.zeros((wavevector.shape[0], 2))
+    sqresults[:, 0] = wavenumber
+
     for n in range(d.SnapshotNumber):
-        sqtotal   = np.zeros((len(wavevector[:, 0]), 2))
+        sqtotal   = np.zeros_like(sqresults)
         condition = selection[:, n] 
         for i in range(d.ParticleNumber[n]):
-            #medium   = twopidl * (d.Positions[n][i] * wavevector[:, 1:]).sum(axis = 1)
-            #sqtotal += np.column_stack((np.sin(medium)*condition[i], np.cos(medium)*condition[i]))
             if condition[i]:
-                medium   = twopidl * (d.Positions[n][i] * wavevector[:, 1:]).sum(axis = 1)
-                sqtotal += np.column_stack((np.sin(medium), np.cos(medium)))
+                thetas = (d.Positions[n][i][np.newaxis, :] * wavevector).sum(axis=1)
+                sqtotal += np.column_stack((np.sin(thetas), np.cos(thetas)))
 
-        sqresults[:, 1] += np.square(sqtotal).sum(axis = 1) / condition.sum() #d.ParticleNumber[n]
+        sqresults[:, 1] += np.square(sqtotal).sum(axis=1) / d.ParticleNumber[n] #condition.sum() #
+    sqresults[:, 1] /= d.SnapshotNumber
 
-    sqresults[:, 0]  = wavevector[:, 0]
-    sqresults[:, 1]  = sqresults[:, 1] / d.SnapshotNumber
-
-    sqresults = pd.DataFrame(sqresults)
-    results   = np.array(sqresults.groupby(sqresults[0]).mean())
-    qvalue    = twopidl * np.sqrt(qvalue)
-    results   = np.column_stack((qvalue, results))
+    sqresults = pd.DataFrame(sqresults).round(6)
+    results = sqresults.groupby(sqresults[0]).mean().reset_index().values
+    
     names = 'q  S(q)'
-
     if outputfile:
         np.savetxt(outputfile, results, fmt='%.6f', header = names, comments = '')
 

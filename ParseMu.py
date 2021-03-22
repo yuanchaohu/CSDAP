@@ -17,15 +17,16 @@ import numpy as np
 import subprocess
 
 
-def GetDipoleVector(inputfile, ndim=2, outputfile=''):
+def GetDipoleVector(inputfile, ndim=2, outputfile='', SnapshotNumber=0):
     """Get the Dipole Vector from LAMMPS dump file with [id type x y mux muy]"""
 
     fin  = open(inputfile, 'r')
     fout = open(outputfile, 'w')
 
-    cmdline = 'grep -o "ITEM: TIMESTEP" %s | wc -l'%inputfile
-    process = subprocess.Popen(cmdline, stdout=subprocess.PIPE, stderr=None, shell=True)
-    SnapshotNumber = int(process.communicate()[0].decode())
+    if not SnapshotNumber:
+        cmdline = 'grep -o "ITEM: TIMESTEP" %s | wc -l'%inputfile
+        process = subprocess.Popen(cmdline, stdout=subprocess.PIPE, stderr=None, shell=True)
+        SnapshotNumber = int(process.communicate()[0].decode())
     print ('Snapshot Number: %s'%SnapshotNumber)
 
     for n in range(SnapshotNumber):

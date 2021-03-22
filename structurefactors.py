@@ -12,6 +12,8 @@ Docstr = """
          This module is responsible for calculating structure factors
          Then the overall and partial S(q) will be written to a file
 
+         The box must be cubic (box lengths at different dimensions are the same)
+
          The module accounts for systems ranging from unary to senary
          each function can be called seperately similar to getresults()
          """
